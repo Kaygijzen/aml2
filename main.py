@@ -17,10 +17,10 @@ from dataloaders import train_val_test_loaders, extract_task
 # Parsing command line arguments
 argparser = argparse.ArgumentParser()
 argparser.add_argument("--num_ways", default=5, type=int, help="Number of classes per task")
-argparser.add_argument("--num_support_shots", default=5, type=int, help="Number of examples/shots per class in support sets")
+argparser.add_argument("--num_support_shots", default=1, type=int, help="Number of examples/shots per class in support sets")
 argparser.add_argument("--num_query_shots", default=15, type=int, help="Number of examples/shots per class in query sets")
 argparser.add_argument("--meta_batch_size", default=1, type=int, help="Number of tasks in a meta-batch")
-argparser.add_argument("--val_interval", default=2500, type=int, help="After how many meta-updates we perform meta-validation")
+argparser.add_argument("--val_interval", default=500, type=int, help="After how many meta-updates we perform meta-validation")
 argparser.add_argument("--num_eval_tasks", default=1000, type=int, help="Number of tasks used for validation/testing")
 argparser.add_argument("--num_train_episodes", default=40000, type=int, help="Number of meta-updates to make during training")
 argparser.add_argument("--lr", default=1e-3, type=float, help="Meta-learning rate (used on query set - potentially acoss tasks)")
@@ -78,7 +78,8 @@ def validate_performance(model, val_loader):
       - vacc (list): list of validation accuracy scores on the evaluation tasks
     """
     vloss, vacc = [], []
-    for bid, batch in tqdm(enumerate(train_loader, start=1)):
+    for vid, batch in tqdm(enumerate(val_loader, start=1)):
+        
         support_inputs, support_targets, query_inputs, query_targets = extract_task(batch)
         support_inputs, support_targets, query_inputs, query_targets = put_on_device(args.dev, [support_inputs, support_targets, query_inputs, query_targets])
         # compute model predictions on the query set, conditioned on the support set
@@ -88,7 +89,7 @@ def validate_performance(model, val_loader):
         vloss.append(loss.item())
         vacc.append(accuracy)
 
-        if bid == args.num_eval_tasks:
+        if vid == args.num_eval_tasks:
             break
 
     return vloss, vacc
@@ -105,7 +106,7 @@ dataloader_config = {
 }
 train_loader, val_loader, test_loader = train_val_test_loaders(**dataloader_config)
 
-
+print('cuda available: ', torch.cuda.is_available())
 if args.dev is None:
     args.dev = "cpu"
 else:
@@ -118,8 +119,15 @@ else:
 
 # Define the model that we use
 constr = MAML
-
-model = constr(num_ways=args.num_ways,T=args.T, input_size=args.img_size**2, rgb=args.rgb, img_size=args.img_size) # images are of size 28x28
+print(f'Running MAML with {"second-order" if args.second_order else "first-order"} gradients')
+model = constr(
+            num_ways=args.num_ways,
+            T=args.T, 
+            input_size=args.img_size**2, 
+            second_order=args.second_order,
+            rgb=args.rgb, 
+            img_size=args.img_size
+        ) # images are of size 28x28
 model = model.to(args.dev)
 loss_fn = nn.CrossEntropyLoss()
 opt = torch.optim.Adam(model.parameters(), lr=args.lr/args.meta_batch_size)
