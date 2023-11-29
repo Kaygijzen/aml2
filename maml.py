@@ -41,7 +41,19 @@ class MAML(nn.Module):
         # we use a custom forward function for our network. You can make predictions using
         # preds = self.network(input_data, weights=<the weights you want to use>)
 
+        # Make a copy of the initial network weights by using param.clone(), 
+        # where param is a tensor from the list of parameters.
+        # PyTorch then knows that the copy (called fast weights) originated from 
+        # the initialization parameters. You can then adjust this copy using gradient 
+        # update steps utilizing the torch.autograd.grad() and appropriate gradient descent 
+        # with the inner learning rate (similarly to how it was 
+        # performed with the SGD optimizer in the higher package).
+
+
         if training:
-            query_loss.backward() # do not remove this if statement, otherwise it won't train
+            # https://stackoverflow.com/questions/51717874/why-is-it-in-pytorch-when-i-make-a-copy-of-a-networks-weight-it-would-be-automa
+            weights = []
+            for param in self.network.parameters():
+                weights.append(param.clone())
 
         raise NotImplementedError()
