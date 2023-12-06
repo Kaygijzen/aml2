@@ -50,17 +50,20 @@ class MAML(nn.Module):
         # performed with the SGD optimizer in the higher package).
         # print('-------------------------------------------------------------')
         fast_weights = [param.clone() for param in self.network.parameters()]
-        if training:
-            for _ in range(self.num_updates):
-                pred_supp = self.network.forward(x_supp, fast_weights)
-                loss_supp = self.inner_loss(pred_supp, y_supp)
 
-                grads = torch.autograd.grad(loss_supp, fast_weights, create_graph=True)
-                for i in range(len(fast_weights)) : fast_weights[i] -= self.inner_lr * grads[i]
+        for _ in range(self.num_updates):
+            pred_supp = self.network(x_supp, fast_weights)
+            loss_supp = self.inner_loss(pred_supp, y_supp)
+
+            grads = torch.autograd.grad(loss_supp, fast_weights, create_graph=True)
+
+            # UPDATE THE MODEL parameters
+            fast_weights = [(fast_weights[i] - self.inner_lr * grads[i]) for i in range(len(fast_weights))]
                 
         pred_query = self.network(x_query, fast_weights)
         loss_query = self.inner_loss(pred_query, y_query)
 
-        # if training : loss_query.backward()
+        if training: 
+            loss_query.backward()
                                     
         return pred_query, loss_query
