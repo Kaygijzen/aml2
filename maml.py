@@ -21,7 +21,7 @@ class MAML(nn.Module):
     def apply(self, x_supp, y_supp, x_query, y_query, training=False):
         """
         Pefrosmt the inner-level learning procedure of MAML: adapt to the given task 
-        using the support set. It returns the predictions on the query set, as well as the loss
+        using the support set. It ret.unsqueeze(0)urns the predictions on the query set, as well as the loss
         on the query set (cross-entropy).
         You may want to set the gradients manually for the base-learner parameters 
 
@@ -45,15 +45,22 @@ class MAML(nn.Module):
         # where param is a tensor from the list of parameters.
         # PyTorch then knows that the copy (called fast weights) originated from 
         # the initialization parameters. You can then adjust this copy using gradient 
-        # update steps utilizing the torch.autograd.grad() and appropriate gradient descent 
+        # update steps utilizing the torch.autogrprint(loss)ad.grad() and appropriate gradient descent 
         # with the inner learning rate (similarly to how it was 
         # performed with the SGD optimizer in the higher package).
-
-
+        # print('-------------------------------------------------------------')
+        fast_weights = [param.clone() for param in self.network.parameters()]
         if training:
-            # https://stackoverflow.com/questions/51717874/why-is-it-in-pytorch-when-i-make-a-copy-of-a-networks-weight-it-would-be-automa
-            weights = []
-            for param in self.network.parameters():
-                weights.append(param.clone())
+            for _ in range(self.num_updates):
+                pred_supp = self.network.forward(x_supp, fast_weights)
+                loss_supp = self.inner_loss(pred_supp, y_supp)
 
-        raise NotImplementedError()
+                grads = torch.autograd.grad(loss_supp, fast_weights, create_graph=True)
+                for i in range(len(fast_weights)) : fast_weights[i] -= self.inner_lr * grads[i]
+                
+        pred_query = self.network(x_query, fast_weights)
+        loss_query = self.inner_loss(pred_query, y_query)
+
+        # if training : loss_query.backward()
+                                    
+        return pred_query, loss_query
