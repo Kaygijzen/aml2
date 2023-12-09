@@ -34,36 +34,31 @@ class MAML(nn.Module):
           - query_preds (torch.Tensor): the predictions of the query inputs
           - query_loss (torch.Tensor): the cross-entropy loss on the query inputs
         """
-        
-        # TODO: implement this function
+        init_weights = [param.clone() for param in self.network.parameters()]
 
-        # Note: to make predictions and to allow for second-order gradients to flow if we want,
-        # we use a custom forward function for our network. You can make predictions using
-        # preds = self.network(input_data, weights=<the weights you want to use>)
+        supp_pred = self.network(x_supp, init_weights)
+        supp_loss = self.inner_loss(supp_pred, y_supp)
 
-        # Make a copy of the initial network weights by using param.clone(), 
-        # where param is a tensor from the list of parameters.
-        # PyTorch then knows that the copy (called fast weights) originated from 
-        # the initialization parameters. You can then adjust this copy using gradient 
-        # update steps utilizing the torch.autogrprint(loss)ad.grad() and appropriate gradient descent 
-        # with the inner learning rate (similarly to how it was 
-        # performed with the SGD optimizer in the higher package).
-        # print('-------------------------------------------------------------')
-        fast_weights = [param.clone() for param in self.network.parameters()]
+        grads = torch.autograd.grad(supp_loss, init_weights, create_graph=self.second_order)
 
-        for _ in range(self.num_updates):
-            pred_supp = self.network(x_supp, fast_weights)
-            loss_supp = self.inner_loss(pred_supp, y_supp)
+        fast_weights = [(init_weights[i] - self.inner_lr * grads[i]) for i in range(len(init_weights))]
 
-            grads = torch.autograd.grad(loss_supp, fast_weights, create_graph=True)
+        query_pred = self.network(x_query, fast_weights)
+        query_loss = self.inner_loss(query_pred, y_query)
 
-            # UPDATE THE MODEL parameters
+        # continue to update if num updates > 1
+        for _ in range(1, self.num_updates):
+            supp_pred = self.network(x_supp, fast_weights)
+            supp_loss = self.inner_loss(supp_pred, y_supp)
+
+            grads = torch.autograd.grad(supp_loss, init_weights, create_graph=self.second_order)
+
             fast_weights = [(fast_weights[i] - self.inner_lr * grads[i]) for i in range(len(fast_weights))]
                 
-        pred_query = self.network(x_query, fast_weights)
-        loss_query = self.inner_loss(pred_query, y_query)
+            query_pred = self.network(x_query, fast_weights)
+            query_loss = self.inner_loss(query_pred, y_query)
 
-        if training: 
-            loss_query.backward()
+        if training:
+            query_loss.backward()
                                     
-        return pred_query, loss_query
+        return query_pred, query_loss
