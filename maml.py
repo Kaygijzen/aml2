@@ -51,7 +51,7 @@ class MAML(nn.Module):
             supp_pred = self.network(x_supp, fast_weights)
             supp_loss = self.inner_loss(supp_pred, y_supp)
 
-            grads = torch.autograd.grad(supp_loss, init_weights, create_graph=self.second_order)
+            grads = torch.autograd.grad(supp_loss, fast_weights, create_graph=self.second_order)
 
             fast_weights = [(fast_weights[i] - self.inner_lr * grads[i]) for i in range(len(fast_weights))]
                 
